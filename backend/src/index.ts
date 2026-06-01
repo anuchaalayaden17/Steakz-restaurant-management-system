@@ -1,0 +1,33 @@
+import cashierRoutes from "./routes/cashierRoutes";
+import waiterRoutes from "./routes/waiterRoutes";
+import chefRoutes from "./routes/chefRoutes";
+import hmRoutes from "./routes/hmRoutes";
+import bmRoutes from "./routes/bmRoutes";
+import adminRoutes from "./routes/adminRoutes";
+import express from "express";
+import cors from "cors";
+import authRoutes from "./routes/authRoutes";
+import publicRoutes from "./routes/publicRoutes";
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+app.use("/api/auth", authRoutes);
+app.use("/api", publicRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/bm", bmRoutes);
+app.use("/api/hm", hmRoutes);
+app.use("/api/chef", chefRoutes);
+app.use("/api/waiter", waiterRoutes);
+app.use("/api/cashier", cashierRoutes);
+app.get("/", (req, res) => {
+  res.send("Steakz Restaurant Management API Running");
+});
+
+const PORT = 5000;
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
