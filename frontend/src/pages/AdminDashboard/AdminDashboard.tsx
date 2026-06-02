@@ -1,6 +1,35 @@
+import { useEffect, useState } from "react";
 import DashboardLayout from "../../layouts/DashboardLayout";
+import api from "../../services/api";
 
 function AdminDashboard() {
+  const [stats, setStats] = useState({
+    totalBranches: 0,
+    totalUsers: 0,
+    totalRoles: 0,
+    systemStatus: "Loading...",
+  });
+
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const token = localStorage.getItem("token");
+
+        const response = await api.get("/admin/dashboard", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        setStats(response.data);
+      } catch (error) {
+        console.error("Failed to load dashboard", error);
+      }
+    };
+
+    fetchDashboard();
+  }, []);
+
   return (
     <DashboardLayout>
       <div className="page-header">
@@ -11,22 +40,22 @@ function AdminDashboard() {
       <div className="dashboard-cards">
         <div className="dashboard-card">
           <h3>Total Branches</h3>
-          <p>7</p>
+          <p>{stats.totalBranches}</p>
         </div>
 
         <div className="dashboard-card">
           <h3>Total Users</h3>
-          <p>6</p>
+          <p>{stats.totalUsers}</p>
         </div>
 
         <div className="dashboard-card">
           <h3>Roles</h3>
-          <p>6</p>
+          <p>{stats.totalRoles}</p>
         </div>
 
         <div className="dashboard-card">
           <h3>System Status</h3>
-          <p>Active</p>
+          <p>{stats.systemStatus}</p>
         </div>
       </div>
 
