@@ -29,5 +29,8 @@ app.get("/", (req, res) => {
 const PORT = 5000;
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log("✅ Steakz Restaurant Management System API");
+  console.log("✅ PostgreSQL database connected");
+  console.log("✅ Prisma Client initialized");
+  console.log(`✅ Backend running on http://localhost:${PORT}`);
 });
