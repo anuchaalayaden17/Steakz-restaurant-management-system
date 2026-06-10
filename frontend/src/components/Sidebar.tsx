@@ -20,32 +20,41 @@ function Sidebar() {
           <>
             <Link to="/admin">📈 Dashboard</Link>
             <Link to="/admin/users">👥 User Management</Link>
-            <Link to="/admin/customers">🧑 Customer Management</Link>
-            <Link to="/admin/menu">🍽️ Menu Management</Link>
-            <Link to="/admin/inventory">📦 Inventory Management</Link>
-            <Link to="/admin/tables">🍴 Table Management</Link>
-            <Link to="/admin/orders">🧾 Orders Overview</Link>
+            <Link to="/admin/branches">🏢 Branch Management</Link>
+          </>
+        )}
+
+        {role === "HM" && (
+          <>
+            <Link to="/hm">📊 Analytics Dashboard</Link>
+            <Link to="/hm/reports">📄 Reports</Link>
+          </>
+        )}
+
+        {role === "BM" && (
+          <>
+            <Link to="/bm">🏢 Branch Dashboard</Link>
+            <Link to="/bm/inventory">📦 Inventory</Link>
           </>
         )}
 
         {role === "WAITER" && (
-          <Link to="/waiter">📝 Waiter POS</Link>
+          <>
+            <Link to="/waiter">📝 Customer Orders</Link>
+          </>
         )}
 
         {role === "CHEF" && (
-          <Link to="/chef">👨‍🍳 Kitchen Orders</Link>
+          <>
+            <Link to="/chef">👨‍🍳 Kitchen Orders</Link>
+            <Link to="/chef/menu">🍽️ Menu Management</Link>
+          </>
         )}
 
         {role === "CASHIER" && (
-          <Link to="/cashier">💳 Payments</Link>
-        )}
-
-        {role === "HM" && (
-          <Link to="/hm">📊 HQ Analytics</Link>
-        )}
-
-        {role === "BM" && (
-          <Link to="/bm">🏢 Branch Dashboard</Link>
+          <>
+            <Link to="/cashier">💳 Payments</Link>
+          </>
         )}
 
         <button

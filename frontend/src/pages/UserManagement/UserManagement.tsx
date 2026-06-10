@@ -8,12 +8,8 @@ type User = {
   lastName: string;
   email: string;
   phoneNumber?: string;
-  role: {
-    roleName: string;
-  };
-  branch?: {
-    branchName: string;
-  };
+  role: { roleName: string };
+  branch?: { branchName: string };
 };
 
 type Role = {
@@ -30,6 +26,8 @@ function UserManagement() {
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [roleFilter, setRoleFilter] = useState("ALL");
+  const [editingUserId, setEditingUserId] = useState<number | null>(null);
 
   const [form, setForm] = useState({
     firstName: "",
@@ -41,43 +39,34 @@ function UserManagement() {
     branchId: "",
   });
 
+  const [editForm, setEditForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phoneNumber: "",
+    roleId: "",
+    branchId: "",
+  });
+
   const token = localStorage.getItem("token");
 
-  const fetchUsers = async () => {
-    const response = await api.get("/admin/users", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+  const headers = {
+    Authorization: `Bearer ${token}`,
+  };
 
-    setUsers(response.data);
+  const fetchData = async () => {
+    const [usersResponse, rolesResponse, branchesResponse] = await Promise.all([
+      api.get("/admin/users", { headers }),
+      api.get("/admin/roles", { headers }),
+      api.get("/admin/branches", { headers }),
+    ]);
+
+    setUsers(usersResponse.data);
+    setRoles(rolesResponse.data);
+    setBranches(branchesResponse.data);
   };
 
   useEffect(() => {
-    const fetchData = async () => {
-      const usersResponse = await api.get("/admin/users", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const rolesResponse = await api.get("/admin/roles", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const branchesResponse = await api.get("/admin/branches", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      setUsers(usersResponse.data);
-      setRoles(rolesResponse.data);
-      setBranches(branchesResponse.data);
-    };
-
     fetchData();
   }, []);
 
@@ -86,6 +75,15 @@ function UserManagement() {
   ) => {
     setForm({
       ...form,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleEditChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    setEditForm({
+      ...editForm,
       [e.target.name]: e.target.value,
     });
   };
@@ -104,11 +102,7 @@ function UserManagement() {
         roleId: Number(form.roleId),
         branchId: Number(form.branchId),
       },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+      { headers }
     );
 
     setForm({
@@ -121,34 +115,62 @@ function UserManagement() {
       branchId: "",
     });
 
-    fetchUsers();
+    fetchData();
+  };
+
+  const handleStartEdit = (user: any) => {
+    const role = roles.find((role) => role.roleName === user.role.roleName);
+    const branch = branches.find(
+      (branch) => branch.branchName === user.branch?.branchName
+    );
+
+    setEditingUserId(user.userId);
+    setEditForm({
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      phoneNumber: user.phoneNumber || "",
+      roleId: role ? String(role.roleId) : "",
+      branchId: branch ? String(branch.branchId) : "",
+    });
+  };
+
+  const handleUpdateUser = async (userId: number) => {
+    await api.put(
+      `/admin/users/${userId}`,
+      {
+        firstName: editForm.firstName,
+        lastName: editForm.lastName,
+        email: editForm.email,
+        phoneNumber: editForm.phoneNumber,
+        roleId: Number(editForm.roleId),
+        branchId: Number(editForm.branchId),
+      },
+      { headers }
+    );
+
+    setEditingUserId(null);
+    fetchData();
   };
 
   const handleDeleteUser = async (userId: number) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this user?"
-    );
+    if (!window.confirm("Are you sure you want to delete this user?")) return;
 
-    if (!confirmed) return;
+    await api.delete(`/admin/users/${userId}`, { headers });
 
-    try {
-      await api.delete(`/admin/users/${userId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      fetchUsers();
-    } catch (error) {
-      console.error("Failed to delete user", error);
-    }
+    fetchData();
   };
+
+  const filteredUsers =
+    roleFilter === "ALL"
+      ? users
+      : users.filter((user) => user.role.roleName === roleFilter);
 
   return (
     <DashboardLayout>
       <div className="page-header">
         <h2>User Management</h2>
-        <p>View and manage Steakz system users.</p>
+        <p>View, filter and manage Steakz system users.</p>
       </div>
 
       <div className="dashboard-panel">
@@ -196,12 +218,7 @@ function UserManagement() {
             onChange={handleChange}
           />
 
-          <select
-            name="roleId"
-            value={form.roleId}
-            onChange={handleChange}
-            required
-          >
+          <select name="roleId" value={form.roleId} onChange={handleChange} required>
             <option value="">Select Role</option>
             {roles.map((role) => (
               <option key={role.roleId} value={role.roleId}>
@@ -231,6 +248,20 @@ function UserManagement() {
       <div className="dashboard-panel">
         <h3>Users</h3>
 
+        <div style={{ marginBottom: "20px" }}>
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+          >
+            <option value="ALL">All Roles</option>
+            {roles.map((role) => (
+              <option key={role.roleId} value={role.roleName}>
+                {role.roleName}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <table className="data-table">
           <thead>
             <tr>
@@ -244,23 +275,115 @@ function UserManagement() {
           </thead>
 
           <tbody>
-            {users.map((user) => (
+            {filteredUsers.map((user) => (
               <tr key={user.userId}>
-                <td>
-                  {user.firstName} {user.lastName}
-                </td>
-                <td>{user.email}</td>
-                <td>{user.role.roleName}</td>
-                <td>{user.branch?.branchName || "No branch"}</td>
-                <td>{user.phoneNumber || "N/A"}</td>
-                <td>
-                  <button
-                    onClick={() => handleDeleteUser(user.userId)}
-                    className="delete-btn"
-                  >
-                    Delete
-                  </button>
-                </td>
+                {editingUserId === user.userId ? (
+                  <>
+                    <td>
+                      <input
+                        name="firstName"
+                        value={editForm.firstName}
+                        onChange={handleEditChange}
+                        placeholder="First Name"
+                      />
+                      <input
+                        name="lastName"
+                        value={editForm.lastName}
+                        onChange={handleEditChange}
+                        placeholder="Last Name"
+                      />
+                    </td>
+
+                    <td>
+                      <input
+                        name="email"
+                        value={editForm.email}
+                        onChange={handleEditChange}
+                        placeholder="Email"
+                      />
+                    </td>
+
+                    <td>
+                      <select
+                        name="roleId"
+                        value={editForm.roleId}
+                        onChange={handleEditChange}
+                      >
+                        <option value="">Select Role</option>
+                        {roles.map((role) => (
+                          <option key={role.roleId} value={role.roleId}>
+                            {role.roleName}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+
+                    <td>
+                      <select
+                        name="branchId"
+                        value={editForm.branchId}
+                        onChange={handleEditChange}
+                      >
+                        <option value="">Select Branch</option>
+                        {branches.map((branch) => (
+                          <option key={branch.branchId} value={branch.branchId}>
+                            {branch.branchName}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+
+                    <td>
+                      <input
+                        name="phoneNumber"
+                        value={editForm.phoneNumber}
+                        onChange={handleEditChange}
+                        placeholder="Phone"
+                      />
+                    </td>
+
+                    <td>
+                      <button
+                        className="save-btn"
+                        onClick={() => handleUpdateUser(user.userId)}
+                      >
+                        Save
+                      </button>
+
+                      <button
+                        className="delete-btn"
+                        onClick={() => setEditingUserId(null)}
+                      >
+                        Cancel
+                      </button>
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td>
+                      {user.firstName} {user.lastName}
+                    </td>
+                    <td>{user.email}</td>
+                    <td>{user.role.roleName}</td>
+                    <td>{user.branch?.branchName || "No branch"}</td>
+                    <td>{user.phoneNumber || "N/A"}</td>
+                    <td>
+                      <button
+                        className="edit-btn"
+                        onClick={() => handleStartEdit(user)}
+                      >
+                        Edit
+                      </button>
+
+                      <button
+                        className="delete-btn"
+                        onClick={() => handleDeleteUser(user.userId)}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </>
+                )}
               </tr>
             ))}
           </tbody>
