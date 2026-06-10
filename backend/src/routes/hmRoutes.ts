@@ -10,26 +10,138 @@ router.use(authorizeRoles("HM"));
 
 router.get("/dashboard", async (req, res) => {
   try {
-    const totalBranches = await prisma.branch.count();
-    const totalUsers = await prisma.user.count();
-    const totalOrders = await prisma.order.count();
+    const branches = await prisma.branch.findMany({
+      include: {
+        users: true,
+        orders: {
+          include: {
+            payment: true,
+            table: true,
+            orderItems: {
+              include: {
+                menuItem: true,
+              },
+            },
+          },
+        },
+        inventory: true,
+        tables: true,
+        reservations: true,
+      },
+      orderBy: {
+        branchId: "asc",
+      },
+    });
 
-    const orders = await prisma.order.findMany();
+    const allOrders = branches.flatMap((branch) => branch.orders);
+    const allUsers = branches.flatMap((branch) => branch.users);
+    const allReservations = branches.flatMap((branch) =>
+      branch.reservations.map((reservation) => ({
+        ...reservation,
+        branchName: branch.branchName,
+        location: branch.location,
+      }))
+    );
+    const allInventory = branches.flatMap((branch) =>
+      branch.inventory.map((item) => ({
+        ...item,
+        branchName: branch.branchName,
+        location: branch.location,
+      }))
+    );
 
-    const totalRevenue = orders.reduce(
-      (sum, order) => sum + order.totalAmount,
+    const paidOrders = allOrders.filter(
+      (order) => order.orderStatus === "Paid"
+    );
+
+    const pendingReservations = allReservations.filter(
+      (reservation) => reservation.reservationStatus === "Pending"
+    );
+
+    const lowStockItems = allInventory.filter(
+      (item) => Number(item.quantityInStock) <= 5
+    );
+
+    const totalRevenue = paidOrders.reduce(
+      (sum, order) => sum + Number(order.totalAmount),
       0
     );
 
+    const branchReports = branches.map((branch) => {
+      const branchPaidOrders = branch.orders.filter(
+        (order) => order.orderStatus === "Paid"
+      );
+
+      const branchRevenue = branchPaidOrders.reduce(
+        (sum, order) => sum + Number(order.totalAmount),
+        0
+      );
+
+      const branchPendingReservations = branch.reservations.filter(
+        (reservation) => reservation.reservationStatus === "Pending"
+      );
+
+      const branchLowStockItems = branch.inventory.filter(
+        (item) => Number(item.quantityInStock) <= 5
+      );
+
+      return {
+        branchId: branch.branchId,
+        branchName: branch.branchName,
+        location: branch.location,
+        totalStaff: branch.users.length,
+        totalOrders: branch.orders.length,
+        paidOrders: branchPaidOrders.length,
+        totalRevenue: branchRevenue,
+        inventoryItems: branch.inventory.length,
+        lowStockItems: branchLowStockItems.length,
+        tables: branch.tables.length,
+        totalReservations: branch.reservations.length,
+        pendingReservations: branchPendingReservations.length,
+      };
+    });
+
+    const bestBranch =
+      branchReports.length > 0
+        ? branchReports.reduce((best, branch) =>
+            branch.totalRevenue > best.totalRevenue ? branch : best
+          )
+        : null;
+
+    const recentPaidOrders = allOrders
+      .filter((order) => order.orderStatus === "Paid")
+      .sort((a, b) => b.orderDate.getTime() - a.orderDate.getTime())
+      .slice(0, 5);
+
+    const recentReservations = allReservations
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 5);
+
+    const topRevenueBranches = [...branchReports]
+      .sort((a, b) => b.totalRevenue - a.totalRevenue)
+      .slice(0, 5);
+
     res.json({
-      totalBranches,
-      totalUsers,
-      totalOrders,
-      totalRevenue,
+      summary: {
+        totalBranches: branches.length,
+        totalStaff: allUsers.length,
+        totalOrders: allOrders.length,
+        paidOrders: paidOrders.length,
+        totalRevenue,
+        totalReservations: allReservations.length,
+        pendingReservations: pendingReservations.length,
+        lowStockItems: lowStockItems.length,
+        bestBranch,
+      },
+      branchReports,
+      recentPaidOrders,
+      recentReservations,
+      lowStockItems,
+      topRevenueBranches,
     });
   } catch (error) {
     res.status(500).json({
-      message: "Failed to load dashboard",
+      message: "Failed to load HQ dashboard",
       error,
     });
   }
@@ -41,6 +153,12 @@ router.get("/branches", async (req, res) => {
       include: {
         users: true,
         orders: true,
+        inventory: true,
+        tables: true,
+        reservations: true,
+      },
+      orderBy: {
+        branchId: "asc",
       },
     });
 
@@ -58,23 +176,94 @@ router.get("/reports", async (req, res) => {
     const branches = await prisma.branch.findMany({
       include: {
         orders: true,
+        users: true,
+        inventory: true,
+        tables: true,
+        reservations: true,
+      },
+      orderBy: {
+        branchId: "asc",
       },
     });
 
-    const report = branches.map((branch) => ({
-      branchId: branch.branchId,
-      branchName: branch.branchName,
-      totalOrders: branch.orders.length,
-      totalRevenue: branch.orders.reduce(
-        (sum, order) => sum + order.totalAmount,
+    const report = branches.map((branch) => {
+      const paidOrders = branch.orders.filter(
+        (order) => order.orderStatus === "Paid"
+      );
+
+      const totalRevenue = paidOrders.reduce(
+        (sum, order) => sum + Number(order.totalAmount),
         0
-      ),
-    }));
+      );
+
+      const pendingReservations = branch.reservations.filter(
+        (reservation) => reservation.reservationStatus === "Pending"
+      );
+
+      const lowStockItems = branch.inventory.filter(
+        (item) => Number(item.quantityInStock) <= 5
+      );
+
+      return {
+        branchId: branch.branchId,
+        branchName: branch.branchName,
+        location: branch.location,
+        totalOrders: branch.orders.length,
+        paidOrders: paidOrders.length,
+        totalRevenue,
+        totalStaff: branch.users.length,
+        inventoryItems: branch.inventory.length,
+        lowStockItems: lowStockItems.length,
+        tables: branch.tables.length,
+        totalReservations: branch.reservations.length,
+        pendingReservations: pendingReservations.length,
+      };
+    });
 
     res.json(report);
   } catch (error) {
     res.status(500).json({
       message: "Failed to generate reports",
+      error,
+    });
+  }
+});
+
+router.get("/reservations", async (req, res) => {
+  try {
+    const reservations = await prisma.reservation.findMany({
+      include: {
+        branch: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    res.json(reservations);
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to fetch reservations",
+      error,
+    });
+  }
+});
+
+router.get("/inventory-overview", async (req, res) => {
+  try {
+    const inventory = await prisma.inventory.findMany({
+      include: {
+        branch: true,
+      },
+      orderBy: {
+        quantityInStock: "asc",
+      },
+    });
+
+    res.json(inventory);
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to fetch inventory overview",
       error,
     });
   }

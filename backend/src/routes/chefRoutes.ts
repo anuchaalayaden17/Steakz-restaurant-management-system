@@ -1,6 +1,6 @@
 import express from "express";
 import prisma from "../lib/prisma";
-import { authenticate } from "../middleware/auth";
+import { authenticate, AuthRequest } from "../middleware/auth";
 import { authorizeRoles } from "../middleware/roleAuth";
 
 const router = express.Router();
@@ -8,12 +8,39 @@ const router = express.Router();
 router.use(authenticate);
 router.use(authorizeRoles("CHEF"));
 
-router.get("/orders", async (req, res) => {
+router.get("/orders", async (req: AuthRequest, res) => {
   try {
+    const chefId = req.user?.userId;
+
+    if (!chefId) {
+      return res.status(401).json({
+        message: "Unauthorized chef",
+      });
+    }
+
+    const chef = await prisma.user.findUnique({
+      where: {
+        userId: chefId,
+      },
+    });
+
+    if (!chef || !chef.branchId) {
+      return res.status(404).json({
+        message: "Chef branch not found",
+      });
+    }
+
     const orders = await prisma.order.findMany({
+      where: {
+        branchId: chef.branchId,
+        orderStatus: {
+          in: ["Pending", "Preparing", "Ready"],
+        },
+      },
       include: {
-        customer: true,
+        branch: true,
         table: true,
+        user: true,
         orderItems: {
           include: {
             menuItem: true,
@@ -27,18 +54,78 @@ router.get("/orders", async (req, res) => {
 
     res.json(orders);
   } catch (error) {
-    res.status(500).json({ message: "Failed to fetch chef orders", error });
+    res.status(500).json({
+      message: "Failed to fetch chef orders",
+      error,
+    });
   }
 });
 
-router.patch("/orders/:id/status", async (req, res) => {
+router.patch("/orders/:id/status", async (req: AuthRequest, res) => {
   try {
+    const chefId = req.user?.userId;
     const orderId = Number(req.params.id);
     const { orderStatus } = req.body;
 
+    if (!chefId) {
+      return res.status(401).json({
+        message: "Unauthorized chef",
+      });
+    }
+
+    const chef = await prisma.user.findUnique({
+      where: {
+        userId: chefId,
+      },
+    });
+
+    if (!chef || !chef.branchId) {
+      return res.status(404).json({
+        message: "Chef branch not found",
+      });
+    }
+
+    const existingOrder = await prisma.order.findUnique({
+      where: {
+        orderId,
+      },
+    });
+
+    if (!existingOrder) {
+      return res.status(404).json({
+        message: "Order not found",
+      });
+    }
+
+    if (existingOrder.branchId !== chef.branchId) {
+      return res.status(403).json({
+        message: "This order does not belong to your branch",
+      });
+    }
+
+    if (!["Pending", "Preparing", "Ready"].includes(orderStatus)) {
+      return res.status(400).json({
+        message: "Invalid order status for chef",
+      });
+    }
+
     const updatedOrder = await prisma.order.update({
-      where: { orderId },
-      data: { orderStatus },
+      where: {
+        orderId,
+      },
+      data: {
+        orderStatus,
+      },
+      include: {
+        branch: true,
+        table: true,
+        user: true,
+        orderItems: {
+          include: {
+            menuItem: true,
+          },
+        },
+      },
     });
 
     res.json({
@@ -46,49 +133,10 @@ router.patch("/orders/:id/status", async (req, res) => {
       order: updatedOrder,
     });
   } catch (error) {
-    res.status(500).json({ message: "Failed to update order status", error });
-  }
-});
-
-router.post("/menu", async (req, res) => {
-  try {
-    const { itemName, description, price, category, availabilityStatus } =
-      req.body;
-
-    const menuItem = await prisma.menuItem.create({
-      data: {
-        itemName,
-        description,
-        price,
-        category,
-        availabilityStatus,
-      },
+    res.status(500).json({
+      message: "Failed to update order status",
+      error,
     });
-
-    res.status(201).json({
-      message: "Menu item created successfully",
-      menuItem,
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Failed to create menu item", error });
-  }
-});
-
-router.patch("/menu/:id", async (req, res) => {
-  try {
-    const menuItemId = Number(req.params.id);
-
-    const updatedMenuItem = await prisma.menuItem.update({
-      where: { menuItemId },
-      data: req.body,
-    });
-
-    res.json({
-      message: "Menu item updated successfully",
-      menuItem: updatedMenuItem,
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Failed to update menu item", error });
   }
 });
 

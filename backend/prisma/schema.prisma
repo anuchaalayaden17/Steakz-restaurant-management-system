@@ -13,10 +13,10 @@ model Branch {
   location    String
   phoneNumber String
 
-  users     User[]
-  orders    Order[]
-  inventory Inventory[]
-  tables    Table[]
+  users        User[]
+  orders       Order[]
+  inventory    Inventory[]
+  tables       Table[]
 }
 
 model Role {
@@ -81,15 +81,15 @@ model Order {
   orderStatus String
   totalAmount Float
 
-  customerId Int
+  customerId Int?
   branchId   Int
   userId     Int
   tableId    Int
 
-  customer Customer @relation(fields: [customerId], references: [customerId])
-  branch   Branch   @relation(fields: [branchId], references: [branchId])
-  user     User     @relation(fields: [userId], references: [userId])
-  table    Table    @relation(fields: [tableId], references: [tableId])
+  customer Customer? @relation(fields: [customerId], references: [customerId])
+  branch   Branch    @relation(fields: [branchId], references: [branchId])
+  user     User      @relation(fields: [userId], references: [userId])
+  table    Table     @relation(fields: [tableId], references: [tableId])
 
   orderItems OrderItem[]
   payment    Payment?
