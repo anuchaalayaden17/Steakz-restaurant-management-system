@@ -26,7 +26,6 @@ router.get("/dashboard", async (req, res) => {
         },
         inventory: true,
         tables: true,
-        reservations: true,
       },
       orderBy: {
         branchId: "asc",
@@ -35,13 +34,7 @@ router.get("/dashboard", async (req, res) => {
 
     const allOrders = branches.flatMap((branch) => branch.orders);
     const allUsers = branches.flatMap((branch) => branch.users);
-    const allReservations = branches.flatMap((branch) =>
-      branch.reservations.map((reservation) => ({
-        ...reservation,
-        branchName: branch.branchName,
-        location: branch.location,
-      }))
-    );
+
     const allInventory = branches.flatMap((branch) =>
       branch.inventory.map((item) => ({
         ...item,
@@ -52,10 +45,6 @@ router.get("/dashboard", async (req, res) => {
 
     const paidOrders = allOrders.filter(
       (order) => order.orderStatus === "Paid"
-    );
-
-    const pendingReservations = allReservations.filter(
-      (reservation) => reservation.reservationStatus === "Pending"
     );
 
     const lowStockItems = allInventory.filter(
@@ -77,10 +66,6 @@ router.get("/dashboard", async (req, res) => {
         0
       );
 
-      const branchPendingReservations = branch.reservations.filter(
-        (reservation) => reservation.reservationStatus === "Pending"
-      );
-
       const branchLowStockItems = branch.inventory.filter(
         (item) => Number(item.quantityInStock) <= 5
       );
@@ -96,8 +81,6 @@ router.get("/dashboard", async (req, res) => {
         inventoryItems: branch.inventory.length,
         lowStockItems: branchLowStockItems.length,
         tables: branch.tables.length,
-        totalReservations: branch.reservations.length,
-        pendingReservations: branchPendingReservations.length,
       };
     });
 
@@ -113,10 +96,6 @@ router.get("/dashboard", async (req, res) => {
       .sort((a, b) => b.orderDate.getTime() - a.orderDate.getTime())
       .slice(0, 5);
 
-    const recentReservations = allReservations
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .slice(0, 5);
-
     const topRevenueBranches = [...branchReports]
       .sort((a, b) => b.totalRevenue - a.totalRevenue)
       .slice(0, 5);
@@ -128,14 +107,11 @@ router.get("/dashboard", async (req, res) => {
         totalOrders: allOrders.length,
         paidOrders: paidOrders.length,
         totalRevenue,
-        totalReservations: allReservations.length,
-        pendingReservations: pendingReservations.length,
         lowStockItems: lowStockItems.length,
         bestBranch,
       },
       branchReports,
       recentPaidOrders,
-      recentReservations,
       lowStockItems,
       topRevenueBranches,
     });
@@ -155,7 +131,6 @@ router.get("/branches", async (req, res) => {
         orders: true,
         inventory: true,
         tables: true,
-        reservations: true,
       },
       orderBy: {
         branchId: "asc",
@@ -179,7 +154,6 @@ router.get("/reports", async (req, res) => {
         users: true,
         inventory: true,
         tables: true,
-        reservations: true,
       },
       orderBy: {
         branchId: "asc",
@@ -194,10 +168,6 @@ router.get("/reports", async (req, res) => {
       const totalRevenue = paidOrders.reduce(
         (sum, order) => sum + Number(order.totalAmount),
         0
-      );
-
-      const pendingReservations = branch.reservations.filter(
-        (reservation) => reservation.reservationStatus === "Pending"
       );
 
       const lowStockItems = branch.inventory.filter(
@@ -215,8 +185,6 @@ router.get("/reports", async (req, res) => {
         inventoryItems: branch.inventory.length,
         lowStockItems: lowStockItems.length,
         tables: branch.tables.length,
-        totalReservations: branch.reservations.length,
-        pendingReservations: pendingReservations.length,
       };
     });
 
@@ -224,26 +192,6 @@ router.get("/reports", async (req, res) => {
   } catch (error) {
     res.status(500).json({
       message: "Failed to generate reports",
-      error,
-    });
-  }
-});
-
-router.get("/reservations", async (req, res) => {
-  try {
-    const reservations = await prisma.reservation.findMany({
-      include: {
-        branch: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    res.json(reservations);
-  } catch (error) {
-    res.status(500).json({
-      message: "Failed to fetch reservations",
       error,
     });
   }
